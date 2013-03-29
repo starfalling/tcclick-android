@@ -33,6 +33,30 @@ public class TCClick {
 		return DeviceInfo.getUDID(instance().application);
 	}
 	
+	public static void event(String name){
+		event(name, name, name);
+	}
+	
+	public static void event(String name, String value){
+		event(name, name, value);
+	}
+	
+	public static void event(String name, String param, String value){
+		if (param==null || param.equals("")) param = name;
+		SQLiteDatabase db = TCClickUtil.dbHelper().getWritableDatabase();
+		String sql = "insert into events (name, param, value, version, created_at)"
+			+" values(?, ?, ?, ?, ?)";
+		Object[] args = {
+				name,
+				param,
+				value,
+				DeviceInfo.getAppVersion(instance().application),
+				(System.currentTimeMillis() / 1000)	
+		};
+		db.execSQL(sql, args);
+		db.close();
+	}
+	
 	private void _onPause(Activity activity){
 		if (activity != currentActivity) return;
 		String activityName = activity.getClass().getSimpleName();
@@ -91,6 +115,7 @@ public class TCClick {
 	
 	private class UploadMonitorDataThread extends Thread{
 		private int maxActivityId;
+		private int maxEventId;
 		
 		private void buildUploadPostDataToBuilder(StringBuilder builder){
 			builder.append("{\"timestamp\":");
@@ -105,6 +130,10 @@ public class TCClick {
 			
 			builder.append("\"exceptions\":");
 			appendExceptionsForUpload(builder);
+			builder.append(",");
+			
+			builder.append("\"events\":");
+			appendEventsForUpload(builder);
 			
 			builder.append("}");
 			builder.append("}");
@@ -122,9 +151,8 @@ public class TCClick {
 			String sql = "select id, activity, start_at, end_at from activities order by id";
 			Cursor cursor = db.rawQuery(sql, null);
 			while(cursor.moveToNext()){
-				int id = maxActivityId = cursor.getInt(0);
+				maxActivityId = cursor.getInt(0);
 				builder.append("{");
-				builder.append("\"id\":");builder.append(id);builder.append(",");
 				builder.append("\"activity\":\"");builder.append(cursor.getString(1));builder.append("\",");
 				builder.append("\"start_at\":");builder.append(cursor.getString(2));builder.append(",");
 				builder.append("\"end_at\":");builder.append(cursor.getString(3));
@@ -145,15 +173,38 @@ public class TCClick {
 			Cursor cursor = db.rawQuery(sql, null);
 			while(cursor.moveToNext()){
 				builder.append("{");
-				String exception = cursor.getString(0);
-				exception = exception.replaceAll("\\\\", "\\\\\\\\");
-				exception = exception.replaceAll("\\\"", "\\\\\"");
-				exception = exception.replaceAll("\t", "\\\\t");
-				exception = exception.replaceAll("\r", "\\\\r");
-				exception = exception.replaceAll("\n", "\\\\n");
+				String exception = TCClickUtil.encodeForJson(cursor.getString(0));
 				builder.append("\"exception\":\"");builder.append(exception);builder.append("\",");
 				builder.append("\"created_at\":");builder.append(cursor.getInt(1));builder.append(",");
 				builder.append("\"md5\":\"");builder.append(cursor.getString(2));builder.append("\"");
+				builder.append("}");
+				if(!cursor.isLast()) builder.append(",");
+			}
+			builder.append("]");
+		}
+		/**
+		 * 从sqlite数据库中取出记录到的events记录并构建一个json字符串用于上传
+		 * @param builder
+		 * @return 构建了的最大的event的ID号
+		 */
+		private void appendEventsForUpload(StringBuilder builder){
+			SQLiteDatabase db = TCClickUtil.dbHelper().getReadableDatabase();
+			
+			builder.append("[");
+			String sql = "select id, name, param, value, version, created_at from events order by id";
+			Cursor cursor = db.rawQuery(sql, null);
+			while(cursor.moveToNext()){
+				maxEventId = cursor.getInt(0);
+				String name = TCClickUtil.encodeForJson(cursor.getString(1));
+				String param = TCClickUtil.encodeForJson(cursor.getString(2));
+				String value = TCClickUtil.encodeForJson(cursor.getString(3));
+				String version = TCClickUtil.encodeForJson(cursor.getString(4));
+				builder.append("{");
+				builder.append("\"name\":\"");builder.append(name);builder.append("\",");
+				builder.append("\"param\":\"");builder.append(param);builder.append("\",");
+				builder.append("\"value\":\"");builder.append(value);builder.append("\",");
+				builder.append("\"version\":\"");builder.append(version);builder.append("\",");
+				builder.append("\"created_at\":");builder.append(cursor.getInt(5));
 				builder.append("}");
 				if(!cursor.isLast()) builder.append(",");
 			}
@@ -176,6 +227,9 @@ public class TCClick {
 				
 				SQLiteDatabase db = TCClickUtil.dbHelper().getWritableDatabase();
 				String sql = "delete from activities where id<="+this.maxActivityId;
+				db.execSQL(sql);
+				
+				sql = "delete from events where id<="+this.maxEventId;
 				db.execSQL(sql);
 				
 				sql = "delete from exceptions";

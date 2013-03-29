@@ -13,12 +13,13 @@ public class TCClickActivity extends Activity {
     
     public void onResume(){
     	super.onResume();
-    	TCClick.onResume(this);
+    	com.truecolor.tcclick.TCClick.onResume(this);
+    	com.truecolor.tcclick.TCClick.event("测试", "测试", "测试");
     }
     
     public void onPause(){
     	super.onPause();
-    	TCClick.onPause(this);
+    	com.truecolor.tcclick.TCClick.onPause(this);
     	throw new RuntimeException("Test");
     }
     

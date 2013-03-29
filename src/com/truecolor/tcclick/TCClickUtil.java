@@ -56,7 +56,7 @@ public class TCClickUtil {
 	}
 	
 	private static TCClickDatabaseHelper dbHelper;
-	private static final int DB_VERSION = 1;
+	private static final int DB_VERSION = 2;
 	public static SQLiteOpenHelper dbHelper(){
 		if (dbHelper == null){
 			dbHelper = new TCClickDatabaseHelper(TCClick.instance().application, "tcclick.db", null, DB_VERSION);
@@ -64,30 +64,58 @@ public class TCClickUtil {
 		return dbHelper;
 	}
 	
+	public static String encodeForJson(String str){
+		String result = str;
+		result = result.replaceAll("\\\\", "\\\\\\\\");
+		result = result.replaceAll("\\\"", "\\\\\"");
+		result = result.replaceAll("/", "\\/");
+		result = result.replaceAll("\b", "\\\\b");
+		result = result.replaceAll("\f", "\\\\f");
+		result = result.replaceAll("\t", "\\\\t");
+		result = result.replaceAll("\r", "\\\\r");
+		result = result.replaceAll("\n", "\\\\n");
+		return result;
+	}
 	
-	private static class TCClickDatabaseHelper extends SQLiteOpenHelper {     
+	
+	private static class TCClickDatabaseHelper extends SQLiteOpenHelper {
 		TCClickDatabaseHelper(Context context, String name, CursorFactory cursorFactory, int version){
 			super(context, name, cursorFactory, version);     
 		}
 
 		public void onCreate(SQLiteDatabase db) {
-			String sql = "create table activities(" +
-					"id integer not null primary key autoincrement," +
-					"activity varchar(255)," +
-					"start_at integer unsigned not null," +
-					"end_at integer unsigned not null" +
-					")";
-			db.execSQL(sql);
-			sql =  "create table if not exists exceptions(" +
-				    "id integer not null primary key autoincrement,"+
-				    "md5 char(32) unique,"+
-				    "exception text,"+
-				    "created_at integer unsigned not null"+
-				    ")";
-			db.execSQL(sql);
+			this.onUpgrade(db, 0, DB_VERSION);
 		}
 
-		public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {     
+		public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+			String sql;
+			switch(oldVersion){
+			case 0:
+				sql = "create table activities(" +
+				"id integer not null primary key autoincrement," +
+				"activity varchar(255)," +
+				"start_at integer unsigned not null," +
+				"end_at integer unsigned not null" +
+				")";
+				db.execSQL(sql);
+				sql =  "create table if not exists exceptions(" +
+				"id integer not null primary key autoincrement,"+
+				"md5 char(32) unique,"+
+				"exception text,"+
+				"created_at integer unsigned not null"+
+				")";
+				db.execSQL(sql);
+			case 1:
+				sql =  "create table if not exists events(" +
+				"id integer not null primary key autoincrement,"+
+				"name varchar(255),"+
+				"param varchar(255),"+
+				"value varchar(255),"+
+				"version varchar(255),"+
+				"created_at integer unsigned not null"+
+				")";
+				db.execSQL(sql);
+			}
 		}
 		public void onOpen(SQLiteDatabase db){
 			super.onOpen(db);       
